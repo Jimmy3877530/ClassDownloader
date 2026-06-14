@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D 火警逃生 - 小地图版</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            touch-action: none; 
+            user-select: none;
+        }
+        #game-canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        /* UI 层 */
+        #ui-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        /* 顶部信息栏 */
+        #top-bar {
+            padding: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px black;
+            z-index: 10;
+            max-width: calc(100% - 150px); /* 留出右上角给小地图 */
+        }
+        #timer { color: #fff; font-size: 16px; }
+        .alarm-on #timer { color: #ff4444; animation: blink 1s infinite; }
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        
+        #health-text { color: #4CAF50; transition: color 0.3s; }
+
+        /* 小地图容器 */
+        #minimap-container {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            border-radius: 8px;
+            padding: 5px;
+            z-index: 15;
+            display: none; /* 开始前隐藏 */
+            pointer-events: none;
+            backdrop-filter: blur(4px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        .minimap-title {
+            color: #ddd;
+            font-size: 10px;
+            text-align: center;
+            margin-bottom: 4px;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+        #minimap {
+            display: block;
+            border-radius: 4px;
+        }
+
+        /* 屏幕准星 */
+        #crosshair {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 20px; height: 20px;
+            transform: translate(-50%, -50%);
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 24px;
+            font-weight: lighter;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        /* 触控区域 & 按钮 */
+        #controls-layer {
+            position: absolute;
+            bottom: 0; left: 0; width: 100%; height: 50%;
+            pointer-events: auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            padding: 15px;
+            box-sizing: border-box;
+            z-index: 20;
+        }
+        
+        #joystick-zone {
+            width: 120px; height: 120px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+            position: relative;
+            pointer-events: none;
+        }
+        #joystick-knob {
+            width: 45px; height: 45px;
+            background: rgba(255,255,255,0.4);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        #action-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            width: 65px; height: 65px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            border: 2px solid rgba(255,255,255,0.5);
+            color: white;
+            font-weight: bold;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 13px;
+            cursor: pointer;
+            backdrop-filter: blur(4px);
+            text-align: center;
+        }
+        .btn:active { background: rgba(255,255,255,0.4); transform: scale(0.95); }
+        #btn-interact { border-color: #4CAF50; }
+        #btn-extinguish { border-color: #2196F3; display: none; }
+        #btn-drink { border-color: #FFC107; display: none; }
+
+        /* 弹窗 UI */
+        .modal {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 100;
+            pointer-events: auto;
+        }
+        .modal h1 { font-size: 28px; margin-bottom: 10px; text-align: center; color: #ffeb3b; }
+        .modal p { font-size: 14px; margin-bottom: 25px; text-align: center; max-width: 90%; line-height: 1.6; }
+        .start-btn {
+            padding: 15px 40px;
+            font-size: 20px;
+            background: #FF5722;
+            color: white;
+            border: none;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            font-weight: bold;
+        }
+        .start-btn:active { transform: scale(0.95); }
+
+        /* 特效层 */
+        #alarm-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: red; opacity: 0; pointer-events: none; z-index: 5;
+            transition: opacity 0.5s;
+        }
+        .flashing { animation: flashAlarm 2s infinite; }
+        @keyframes flashAlarm { 0% { opacity: 0; } 50% { opacity: 0.15; } 100% { opacity: 0; } }
+
+        #damage-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #ff0000; opacity: 0; pointer-events: none; z-index: 8;
+            transition: opacity 0.2s;
+        }
+
+        #toast {
+            position: absolute; top: 20%; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.7); color: white; padding: 12px 24px;
+            border-radius: 20px; font-size: 15px; font-weight: bold; opacity: 0; transition: opacity 0.3s;
+            z-index: 50; pointer-events: none; text-align: center; white-space: nowrap;
+        }
+    </style>
+    <!-- 引入 Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="alarm-overlay"></div>
+    <div id="damage-overlay"></div>
+    
+    <div id="ui-layer">
+        <div id="top-bar">
+            <div>状态: <span id="status-text">巡逻中...</span></div>
+            <div>生命: <span id="health-text">100</span></div>
+            <div id="timer">02:00</div>
+            <div>烟感器: <span id="detector-count">0/0</span></div>
+            <div>灭火器: <span id="extinguisher-count">0</span></div>
+            <div>饮料: <span id="drink-count">0</span></div>
+        </div>
+        
+        <!-- 新增：小地图 UI -->
+        <div id="minimap-container">
+            <div class="minimap-title">雷达系统</div>
+            <canvas id="minimap" width="120" height="88"></canvas>
+        </div>
+
+        <div id="crosshair">+</div>
+    </div>
+    
+    <div id="toast">提示信息</div>
+
+    <div id="controls-layer" style="display:none;">
+        <div id="joystick-zone">
+            <div id="joystick-knob"></div>
+        </div>
+        <div id="action-buttons">
+            <div class="btn" id="btn-interact">关闭<br>报警</div>
+            <div class="btn" id="btn-extinguish">灭火</div>
+            <div class="btn" id="btn-drink">喝饮料</div>
+        </div>
+    </div>
+
+    <div id="start-screen" class="modal">
+        <h1>火警逃生行动 - 雷达开启</h1>
+        <p>1. <b>控制：</b>左边摇杆移动，右边滑动转视角。<br>
+        2. <b>任务：</b>起火后关闭天花板上的<b>闪红光烟感器</b>。<br>
+        3. <b>小地图：</b>注意看右上角雷达，<b>红点</b>为烟感器位置！<br>
+        4. <b>危险：</b>碰到火苗会<b>扣除 10 点生命！</b><br>
+        5. <b>灭火：</b>拾取蓝色灭火器，对准火苗点击“灭火”。<br>
+        6. <b>冲刺：</b>拾取黄色的<b>能量饮料</b>使用可获10秒高移速！<br>
+        7. <b>逃生：</b>关闭所有报警器后，逃向地图上的<b>绿色安全出口</b>！</p>
+        <button class="start-btn" id="btn-start">开始巡逻</button>
+    </div>
+
+    <div id="end-screen" class="modal" style="display:none;">
+        <h1 id="end-title">游戏结束</h1>
+        <p id="end-msg">你未能逃出大楼。</p>
+        <button class="start-btn" onclick="location.reload()">重新开始</button>
+    </div>
+
+<script>
+// --- 游戏核心配置 ---
+const MAP_SIZE = 2; 
+const WALL_HEIGHT = 3;
+const PLAYER_RADIUS = 0.6; 
+const LOOK_SPEED = 0.004;
+
+const mapData = [
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,1,0,0,0,0,0,0,0,0,2,1],
+    [1,0,1,0,1,0,1,1,1,1,1,1,0,1,1],
+    [1,0,1,0,0,0,1,0,0,0,0,1,0,0,1],
+    [1,0,1,1,1,0,1,0,1,1,0,1,1,0,1],
+    [1,0,0,0,0,0,0,0,1,0,0,0,0,0,1],
+    [1,1,1,1,1,1,1,0,1,0,1,1,1,1,1],
+    [1,0,0,0,1,0,0,0,1,0,0,0,0,0,1],
+    [1,0,1,0,1,0,1,1,1,1,1,1,1,0,1],
+    [1,0,1,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+];
+
+// --- 游戏状态变量 ---
+let scene, camera, renderer;
+let walls = [], detectors = [], extinguishers = [], drinks = [], fires = [];
+let exitZone = null;
+let raycaster = new THREE.Raycaster();
+let centerPoint = new THREE.Vector2(0, 0);
+
+let gameState = 'START';
+let timer = 120;
+let health = 100;
+let lastDamageTime = 0;
+let speedBoostTime = 0;
+
+let alarmTimerInterval, fireSpawnInterval;
+let totalDetectors = 0, clickedDetectors = 0, myExtinguishers = 0, myDrinks = 0;
+
+// 控制变量
+let moveForward = 0, moveRight = 0;
+let velocity = new THREE.Vector3(); 
+let targetYaw = 0, currentYaw = 0;  
+let targetPitch = 0, currentPitch = 0; 
+
+let touchIdMove = null, touchIdLook = null;
+let moveStartX, moveStartY, lastTouchX = {}, lastTouchY = {};
+
+// UI 元素
+const uiTimer = document.getElementById('timer');
+const uiHealth = document.getElementById('health-text');
+const uiDetectorCount = document.getElementById('detector-count');
+const uiExtCount = document.getElementById('extinguisher-count');
+const uiDrinkCount = document.getElementById('drink-count');
+const uiStatus = document.getElementById('status-text');
+const btnExtinguish = document.getElementById('btn-extinguish');
+const btnDrink = document.getElementById('btn-drink');
+const alarmOverlay = document.getElementById('alarm-overlay');
+const damageOverlay = document.getElementById('damage-overlay');
+
+// 小地图系统
+const minimapCanvas = document.getElementById('minimap');
+const mCtx = minimapCanvas.getContext('2d');
+const TILE_W = minimapCanvas.width / mapData[0].length;
+const TILE_H = minimapCanvas.height / mapData.length;
+
+function init() {
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x111111);
+    scene.fog = new THREE.Fog(0x111111, 2, 18);
+
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.rotation.order = 'YXZ'; 
+
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.insertBefore(renderer.domElement, document.body.firstChild);
+
+    const ambientLight = new THREE.AmbientLight(0x404040, 1.5); 
+    scene.add(ambientLight);
+    const pointLight = new THREE.PointLight(0xffffff, 0.8, 10);
+    camera.add(pointLight); 
+    scene.add(camera);
+
+    buildMap();
+    setupControls();
+
+    window.addEventListener('resize', onWindowResize, false);
+    
+    document.getElementById('btn-start').addEventListener('click', startGame);
+    document.getElementById('btn-interact').addEventListener('touchstart', (e)=>{e.preventDefault(); interact();});
+    document.getElementById('btn-extinguish').addEventListener('touchstart', (e)=>{e.preventDefault(); useExtinguisher();});
+    document.getElementById('btn-drink').addEventListener('touchstart', (e)=>{e.preventDefault(); useDrink();});
+    
+    document.getElementById('btn-interact').addEventListener('mousedown', interact);
+    document.getElementById('btn-extinguish').addEventListener('mousedown', useExtinguisher);
+    document.getElementById('btn-drink').addEventListener('mousedown', useDrink);
+
+    animate();
+}
+
+function buildMap() {
+    const wallGeo = new THREE.BoxGeometry(MAP_SIZE, WALL_HEIGHT, MAP_SIZE);
+    const wallMat = new THREE.MeshLambertMaterial({ color: 0x556677 });
+    const floorGeo = new THREE.PlaneGeometry(mapData[0].length * MAP_SIZE, mapData.length * MAP_SIZE);
+    const floorMat = new THREE.MeshLambertMaterial({ color: 0x333333 });
+    const ceilMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
+
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set((mapData[0].length * MAP_SIZE)/2 - MAP_SIZE/2, 0, (mapData.length * MAP_SIZE)/2 - MAP_SIZE/2);
+    scene.add(floor);
+
+    const ceiling = new THREE.Mesh(floorGeo, ceilMat);
+    ceiling.rotation.x = Math.PI / 2;
+    ceiling.position.copy(floor.position);
+    ceiling.position.y = WALL_HEIGHT;
+    scene.add(ceiling);
+
+    let emptySpots = [];
+
+    for (let z = 0; z < mapData.length; z++) {
+        for (let x = 0; x < mapData[z].length; x++) {
+            let px = x * MAP_SIZE;
+            let pz = z * MAP_SIZE;
+
+            if (mapData[z][x] === 1) {
+                let wall = new THREE.Mesh(wallGeo, wallMat);
+                wall.position.set(px, WALL_HEIGHT/2, pz);
+                scene.add(wall);
+                walls.push(wall);
+            } else if (mapData[z][x] === 0) {
+                emptySpots.push({x: px, z: pz});
+            } else if (mapData[z][x] === 2) {
+                let exitGeo = new THREE.BoxGeometry(MAP_SIZE, WALL_HEIGHT, MAP_SIZE);
+                let exitMat = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.3 });
+                let exit = new THREE.Mesh(exitGeo, exitMat);
+                exit.position.set(px, WALL_HEIGHT/2, pz);
+                scene.add(exit);
+                exitZone = new THREE.Box3().setFromObject(exit);
+                
+                let signGeo = new THREE.PlaneGeometry(1, 0.5);
+                let signMat = new THREE.MeshBasicMaterial({color: 0x00ff00});
+                let sign = new THREE.Mesh(signGeo, signMat);
+                sign.position.set(px, WALL_HEIGHT - 0.5, pz);
+                scene.add(sign);
+            }
+        }
+    }
+
+    let startSpot = emptySpots[Math.floor(Math.random() * emptySpots.length)];
+    camera.position.set(startSpot.x, WALL_HEIGHT * 0.6, startSpot.z);
+    
+    targetYaw = currentYaw = 0;
+    targetPitch = currentPitch = 0;
+
+    totalDetectors = 4;
+    for(let i=0; i<totalDetectors; i++){
+        let spotIndex = Math.floor(Math.random() * emptySpots.length);
+        let spot = emptySpots.splice(spotIndex, 1)[0];
+        createDetector(spot.x, spot.z);
+    }
+    uiDetectorCount.innerText = `0/${totalDetectors}`;
+
+    for(let i=0; i<3; i++){
+        if(emptySpots.length === 0) break;
+        let spotIndex = Math.floor(Math.random() * emptySpots.length);
+        let spot = emptySpots.splice(spotIndex, 1)[0];
+        createExtinguisher(spot.x, spot.z);
+    }
+
+    for(let i=0; i<3; i++){
+        if(emptySpots.length === 0) break;
+        let spotIndex = Math.floor(Math.random() * emptySpots.length);
+        let spot = emptySpots.splice(spotIndex, 1)[0];
+        createDrink(spot.x, spot.z);
+    }
+}
+
+function createDetector(x, z) {
+    const geo = new THREE.CylinderGeometry(0.2, 0.2, 0.1, 16);
+    const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const detector = new THREE.Mesh(geo, mat);
+    detector.position.set(x, WALL_HEIGHT - 0.05, z);
+    
+    const lightGeo = new THREE.SphereGeometry(0.05);
+    const lightMat = new THREE.MeshBasicMaterial({ color: 0x550000 });
+    const light = new THREE.Mesh(lightGeo, lightMat);
+    light.position.y = -0.05;
+    detector.add(light);
+    
+    detector.userData = { isDetector: true, clicked: false, light: light };
+    scene.add(detector);
+    detectors.push(detector);
+}
+
+function createExtinguisher(x, z) {
+    const geo = new THREE.CylinderGeometry(0.15, 0.15, 0.6, 16);
+    const mat = new THREE.MeshLambertMaterial({ color: 0x2196F3 }); 
+    const ext = new THREE.Mesh(geo, mat);
+    ext.position.set(x, 0.3, z);
+    scene.add(ext);
+    extinguishers.push(ext);
+}
+
+function createDrink(x, z) {
+    const geo = new THREE.CylinderGeometry(0.08, 0.08, 0.25, 12);
+    const mat = new THREE.MeshLambertMaterial({ color: 0xFFEB3B });
+    const drink = new THREE.Mesh(geo, mat);
+    drink.position.set(x, 0.15, z);
+    scene.add(drink);
+    drinks.push(drink);
+}
+
+function spawnFire() {
+    if(gameState !== 'ALARM') return;
+    
+    let x, z;
+    while(true) {
+        let gridX = Math.floor(Math.random() * mapData[0].length);
+        let gridZ = Math.floor(Math.random() * mapData.length);
+        if(mapData[gridZ][gridX] === 0) {
+            x = gridX * MAP_SIZE;
+            z = gridZ * MAP_SIZE;
+            let dist = Math.hypot(camera.position.x - x, camera.position.z - z);
+            if(dist > 4) break; 
+        }
+    }
+
+    const geo = new THREE.TetrahedronGeometry(0.4, 0);
+    const mat = new THREE.MeshBasicMaterial({ color: 0xff4400 });
+    const fire = new THREE.Mesh(geo, mat);
+    fire.position.set(x, 0.4, z);
+    
+    const pointLight = new THREE.PointLight(0xff4400, 1, 4);
+    fire.add(pointLight);
+    scene.add(fire);
+    fires.push(fire);
+}
+
+// --- 控制逻辑 ---
+function setupControls() {
+    const touchLayer = document.body;
+
+    touchLayer.addEventListener('touchstart', (e) => {
+        if(gameState === 'START' || gameState === 'END') return;
+        
+        for (let i = 0; i < e.changedTouches.length; i++) {
+            let touch = e.changedTouches[i];
+            if(touch.target.closest('#action-buttons')) continue;
+
+            if (touch.clientX < window.innerWidth / 2) {
+                if (touchIdMove === null) {
+                    touchIdMove = touch.identifier;
+                    moveStartX = touch.clientX;
+                    moveStartY = touch.clientY;
+                }
+            } else {
+                if (touchIdLook === null) {
+                    touchIdLook = touch.identifier;
+                    lastTouchX[touch.identifier] = touch.clientX;
+                    lastTouchY[touch.identifier] = touch.clientY;
+                }
+            }
+        }
+    }, {passive: false});
+
+    touchLayer.addEventListener('touchmove', (e) => {
+        if(gameState === 'START' || gameState === 'END') return;
+        
+        for (let i = 0; i < e.changedTouches.length; i++) {
+            let touch = e.changedTouches[i];
+            
+            if (touch.identifier === touchIdMove) {
+                let dx = touch.clientX - moveStartX;
+                let dy = touch.clientY - moveStartY;
+                
+                let distance = Math.min(40, Math.hypot(dx, dy));
+                let angle = Math.atan2(dy, dx);
+                const knob = document.getElementById('joystick-knob');
+                knob.style.transform = `translate(calc(-50% + ${Math.cos(angle)*distance}px), calc(-50% + ${Math.sin(angle)*distance}px))`;
+
+                moveRight = (Math.cos(angle) * distance) / 40; 
+                moveForward = -(Math.sin(angle) * distance) / 40;
+                
+            } else if (touch.identifier === touchIdLook) {
+                if(lastTouchX[touch.identifier] !== undefined) {
+                    let dx = touch.clientX - lastTouchX[touch.identifier];
+                    let dy = touch.clientY - lastTouchY[touch.identifier];
+                    
+                    targetYaw -= dx * LOOK_SPEED;
+                    targetPitch -= dy * LOOK_SPEED;
+                    targetPitch = Math.max(-Math.PI/2.2, Math.min(Math.PI/2.2, targetPitch));
+                }
+                lastTouchX[touch.identifier] = touch.clientX;
+                lastTouchY[touch.identifier] = touch.clientY;
+            }
+        }
+    }, {passive: false});
+
+    touchLayer.addEventListener('touchend', handleTouchEnd);
+    touchLayer.addEventListener('touchcancel', handleTouchEnd);
+
+    function handleTouchEnd(e) {
+        for (let i = 0; i < e.changedTouches.length; i++) {
+            let touch = e.changedTouches[i];
+            if (touch.identifier === touchIdMove) {
+                touchIdMove = null;
+                moveForward = 0;
+                moveRight = 0;
+                const knob = document.getElementById('joystick-knob');
+                knob.style.transform = `translate(-50%, -50%)`;
+            } else if (touch.identifier === touchIdLook) {
+                touchIdLook = null;
+                delete lastTouchX[touch.identifier];
+                delete lastTouchY[touch.identifier];
+            }
+        }
+    }
+
+    let isMouseDown = false;
+    document.addEventListener('mousedown', (e) => { 
+        if(!e.target.closest('.btn') && (gameState === 'EXPLORE' || gameState === 'ALARM')) isMouseDown = true; 
+    });
+    document.addEventListener('mouseup', () => { isMouseDown = false; });
+    document.addEventListener('mousemove', (e) => {
+        if(isMouseDown && (gameState === 'EXPLORE' || gameState === 'ALARM')) {
+            targetYaw -= e.movementX * LOOK_SPEED;
+            targetPitch -= e.movementY * LOOK_SPEED;
+            targetPitch = Math.max(-Math.PI/2.2, Math.min(Math.PI/2.2, targetPitch));
+        }
+    });
+    document.addEventListener('keydown', (e) => {
+        if(e.key === 'w' || e.key === 'W') moveForward = 1;
+        if(e.key === 's' || e.key === 'S') moveForward = -1;
+        if(e.key === 'a' || e.key === 'A') moveRight = -1;
+        if(e.key === 'd' || e.key === 'D') moveRight = 1;
+    });
+    document.addEventListener('keyup', (e) => {
+        if((e.key === 'w' || e.key === 'W') && moveForward > 0) moveForward = 0;
+        if((e.key === 's' || e.key === 'S') && moveForward < 0) moveForward = 0;
+        if((e.key === 'a' || e.key === 'A') && moveRight < 0) moveRight = 0;
+        if((e.key === 'd' || e.key === 'D') && moveRight > 0) moveRight = 0;
+    });
+}
+
+// --- 小地图绘制逻辑 ---
+function drawMinimap() {
+    mCtx.clearRect(0, 0, minimapCanvas.width, minimapCanvas.height);
+
+    // 1. 绘制环境
+    for (let z = 0; z < mapData.length; z++) {
+        for (let x = 0; x < mapData[z].length; x++) {
+            if (mapData[z][x] === 1) {
+                mCtx.fillStyle = 'rgba(85, 102, 119, 0.9)'; // 墙
+                mCtx.fillRect(x * TILE_W, z * TILE_H, TILE_W, TILE_H);
+            } else if (mapData[z][x] === 2) {
+                mCtx.fillStyle = 'rgba(0, 255, 0, 0.5)'; // 出口
+                mCtx.fillRect(x * TILE_W, z * TILE_H, TILE_W, TILE_H);
+            } else {
+                mCtx.fillStyle = 'rgba(30, 30, 30, 0.7)'; // 地板
+                mCtx.fillRect(x * TILE_W, z * TILE_H, TILE_W, TILE_H);
+            }
+        }
+    }
+
+    // 2. 绘制烟感器
+    detectors.forEach(d => {
+        let cx = (d.position.x / MAP_SIZE) * TILE_W + TILE_W / 2;
+        let cy = (d.position.z / MAP_SIZE) * TILE_H + TILE_H / 2;
+        
+        mCtx.beginPath();
+        mCtx.arc(cx, cy, 3, 0, Math.PI * 2);
+        if (d.userData.clicked) {
+            mCtx.fillStyle = '#00FF00'; // 已关闭显示绿色
+        } else {
+            let blink = Math.sin(Date.now() * 0.01) > 0;
+            mCtx.fillStyle = blink ? '#FF0000' : '#880000'; // 闪烁红光
+        }
+        mCtx.fill();
+        mCtx.closePath();
+    });
+
+    // 3. 绘制玩家及视角
+    let px = (camera.position.x / MAP_SIZE) * TILE_W + TILE_W / 2;
+    let py = (camera.position.z / MAP_SIZE) * TILE_H + TILE_H / 2;
+    
+    mCtx.save();
+    mCtx.translate(px, py);
+    // 抵消 Three.js 和 Canvas 的旋转差异
+    mCtx.rotate(-currentYaw); 
+    
+    // 绘制一个带凹槽的发光科技箭头
+    mCtx.beginPath();
+    mCtx.moveTo(0, -6);
+    mCtx.lineTo(4, 5);
+    mCtx.lineTo(0, 3); 
+    mCtx.lineTo(-4, 5);
+    mCtx.fillStyle = '#00DDFF'; 
+    mCtx.shadowColor = '#00DDFF';
+    mCtx.shadowBlur = 4;
+    mCtx.fill();
+    mCtx.closePath();
+    
+    mCtx.restore();
+}
+
+function showToast(msg) {
+    const toast = document.getElementById('toast');
+    toast.innerText = msg;
+    toast.style.opacity = 1;
+    setTimeout(() => { toast.style.opacity = 0; }, 2000);
+}
+
+function updateHealthUI() {
+    uiHealth.innerText = health;
+    if(health > 60) uiHealth.style.color = "#4CAF50";
+    else if(health > 30) uiHealth.style.color = "#FFC107";
+    else uiHealth.style.color = "#F44336";
+}
+
+function flashDamage() {
+    damageOverlay.style.opacity = 0.5;
+    setTimeout(() => { damageOverlay.style.opacity = 0; }, 200);
+}
+
+function interact() {
+    if (gameState !== 'ALARM') {
+        showToast("现在还很安全，没必要按。");
+        return;
+    }
+
+    raycaster.setFromCamera(centerPoint, camera);
+    const intersects = raycaster.intersectObjects(detectors);
+
+    if (intersects.length > 0) {
+        let obj = intersects[0].object;
+        if (intersects[0].distance < 5 && !obj.userData.clicked) {
+            obj.userData.clicked = true;
+            obj.userData.light.material.color.setHex(0x00ff00); 
+            clickedDetectors++;
+            uiDetectorCount.innerText = `${clickedDetectors}/${totalDetectors}`;
+            showToast("已关闭一个报警器！");
+            
+            checkWinCondition();
+        } else if (intersects[0].distance >= 5) {
+             showToast("太远了，再靠近点！");
+        }
+    }
+}
+
+function useExtinguisher() {
+    if (myExtinguishers <= 0) return;
+
+    raycaster.setFromCamera(centerPoint, camera);
+    const intersects = raycaster.intersectObjects(fires);
+
+    if (intersects.length > 0 && intersects[0].distance < 7) {
+        let fire = intersects[0].object;
+        scene.remove(fire);
+        fires = fires.filter(f => f !== fire);
+        
+        myExtinguishers--;
+        uiExtCount.innerText = myExtinguishers;
+        if(myExtinguishers <= 0) btnExtinguish.style.display = 'none';
+        
+        showToast("成功扑灭火苗！");
+        
+        let flash = document.createElement('div');
+        flash.style.position = 'absolute';
+        flash.style.top = '0'; flash.style.left = '0';
+        flash.style.width = '100%'; flash.style.height = '100%';
+        flash.style.backgroundColor = 'white';
+        flash.style.opacity = '0.7';
+        flash.style.zIndex = '99';
+        flash.style.transition = 'opacity 0.4s';
+        flash.style.pointerEvents = 'none';
+        document.body.appendChild(flash);
+        setTimeout(() => { flash.style.opacity = '0'; }, 50);
+        setTimeout(() => { flash.remove(); }, 450);
+    } else {
+        myExtinguishers--;
+        uiExtCount.innerText = myExtinguishers;
+        if(myExtinguishers <= 0) btnExtinguish.style.display = 'none';
+        showToast("未对准或距离太远，浪费了灭火剂！");
+    }
+}
+
+function useDrink() {
+    if (myDrinks <= 0) return;
+    myDrinks--;
+    uiDrinkCount.innerText = myDrinks;
+    if(myDrinks <= 0) btnDrink.style.display = 'none';
+
+    speedBoostTime = 10; 
+    showToast("⚡ 喝下能量饮料！移速狂飙10秒！");
+    
+    camera.fov = 95;
+    camera.updateProjectionMatrix();
+}
+
+function checkAutoPickup() {
+    for (let i = extinguishers.length - 1; i >= 0; i--) {
+        let ext = extinguishers[i];
+        let dist = Math.hypot(camera.position.x - ext.position.x, camera.position.z - ext.position.z);
+        if (dist < 1.5) {
+            scene.remove(ext);
+            extinguishers.splice(i, 1);
+            myExtinguishers += 3;
+            uiExtCount.innerText = myExtinguishers;
+            btnExtinguish.style.display = 'flex';
+            showToast("获得灭火器 (可用3次)！");
+        }
+    }
+
+    for (let i = drinks.length - 1; i >= 0; i--) {
+        let drink = drinks[i];
+        let dist = Math.hypot(camera.position.x - drink.position.x, camera.position.z - drink.position.z);
+        if (dist < 1.5) {
+            scene.remove(drink);
+            drinks.splice(i, 1);
+            myDrinks += 1;
+            uiDrinkCount.innerText = myDrinks;
+            btnDrink.style.display = 'flex';
+            showToast("获得一罐能量饮料！");
+        }
+    }
+}
+
+function startGame() {
+    document.getElementById('start-screen').style.display = 'none';
+    document.getElementById('controls-layer').style.display = 'flex';
+    document.getElementById('minimap-container').style.display = 'block'; // 显示小地图
+    gameState = 'EXPLORE';
+    health = 100;
+    timer = 120;
+    uiTimer.innerText = "02:00";
+    updateHealthUI();
+    
+    let timeToFire = Math.floor(Math.random() * 8000) + 8000;
+    setTimeout(triggerFireAlarm, timeToFire);
+}
+
+function triggerFireAlarm() {
+    if(gameState === 'END') return;
+    gameState = 'ALARM';
+    uiStatus.innerText = "火灾警报！快逃！";
+    uiStatus.style.color = "#ff4444";
+    
+    document.body.classList.add('alarm-on');
+    alarmOverlay.classList.add('flashing');
+
+    detectors.forEach(d => {
+        d.userData.light.material.color.setHex(0xff0000);
+    });
+
+    for(let i=0; i<4; i++) spawnFire();
+    
+    fireSpawnInterval = setInterval(spawnFire, 6000);
+
+    alarmTimerInterval = setInterval(() => {
+        timer--;
+        let m = Math.floor(timer / 60).toString().padStart(2, '0');
+        let s = (timer % 60).toString().padStart(2, '0');
+        uiTimer.innerText = `${m}:${s}`;
+        
+        if (timer <= 0) {
+            gameOver(false, "时间耗尽，你被困在了大楼里！");
+        }
+    }, 1000);
+}
+
+function checkWinCondition() {
+    if (gameState === 'ALARM' && clickedDetectors === totalDetectors) {
+        if (exitZone && exitZone.containsPoint(camera.position)) {
+            gameOver(true, "太棒了！你关闭了所有报警器并成功逃生！");
+        }
+    }
+}
+
+function gameOver(win, msg) {
+    gameState = 'END';
+    clearInterval(alarmTimerInterval);
+    clearInterval(fireSpawnInterval);
+    document.getElementById('controls-layer').style.display = 'none';
+    document.getElementById('minimap-container').style.display = 'none';
+    
+    const endScreen = document.getElementById('end-screen');
+    endScreen.style.display = 'flex';
+    document.getElementById('end-title').innerText = win ? "任务完成" : "行动失败";
+    document.getElementById('end-title').style.color = win ? "#4CAF50" : "#F44336";
+    document.getElementById('end-msg').innerText = msg;
+}
+
+// --- 物理更新系统 ---
+const clock = new THREE.Clock();
+
+function updatePhysics(delta) {
+    if(gameState === 'START' || gameState === 'END') return;
+
+    currentYaw += (targetYaw - currentYaw) * 15 * delta;
+    currentPitch += (targetPitch - currentPitch) * 15 * delta;
+    camera.rotation.set(currentPitch, currentYaw, 0, 'YXZ');
+
+    let dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
+    dir.y = 0; dir.normalize();
+
+    let right = new THREE.Vector3();
+    right.crossVectors(dir, camera.up).normalize();
+
+    velocity.x -= velocity.x * 10.0 * delta;
+    velocity.z -= velocity.z * 10.0 * delta;
+
+    if (speedBoostTime > 0) {
+        speedBoostTime -= delta;
+        if (speedBoostTime <= 0) {
+            camera.fov = 75; 
+            camera.updateProjectionMatrix();
+        }
+    }
+    
+    const acceleration = speedBoostTime > 0 ? 75.0 : 35.0; 
+    velocity.addScaledVector(dir, moveForward * acceleration * delta);
+    velocity.addScaledVector(right, moveRight * acceleration * delta);
+
+    camera.position.x += velocity.x * delta;
+    camera.position.z += velocity.z * delta;
+
+    let checkGridX = Math.floor((camera.position.x + MAP_SIZE/2) / MAP_SIZE);
+    let checkGridZ = Math.floor((camera.position.z + MAP_SIZE/2) / MAP_SIZE);
+
+    for (let z = checkGridZ - 1; z <= checkGridZ + 1; z++) {
+        for (let x = checkGridX - 1; x <= checkGridX + 1; x++) {
+            if (z >= 0 && z < mapData.length && x >= 0 && x < mapData[0].length) {
+                if (mapData[z][x] === 1) { 
+                    let cx = x * MAP_SIZE; 
+                    let cz = z * MAP_SIZE; 
+                    let half = MAP_SIZE / 2;
+                    
+                    let minX = cx - half, maxX = cx + half;
+                    let minZ = cz - half, maxZ = cz + half;
+                    
+                    let px = camera.position.x;
+                    let pz = camera.position.z;
+                    
+                    let closestX = Math.max(minX, Math.min(px, maxX));
+                    let closestZ = Math.max(minZ, Math.min(pz, maxZ));
+                    
+                    let dx = px - closestX;
+                    let dz = pz - closestZ;
+                    let distSq = dx * dx + dz * dz;
+                    
+                    if (distSq < PLAYER_RADIUS * PLAYER_RADIUS) {
+                        let dist = Math.sqrt(distSq);
+                        let overlap = PLAYER_RADIUS - dist;
+                        if (dist > 0.001) {
+                            let nx = dx / dist;
+                            let nz = dz / dist;
+                            camera.position.x += nx * overlap;
+                            camera.position.z += nz * overlap;
+                            
+                            let dot = velocity.x * nx + velocity.z * nz;
+                            if (dot < 0) {
+                                velocity.x -= dot * nx;
+                                velocity.z -= dot * nz;
+                            }
+                        } else {
+                            camera.position.x += PLAYER_RADIUS;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    checkAutoPickup();
+
+    drinks.forEach(drink => {
+        drink.rotation.y += delta;
+        drink.position.y = 0.15 + Math.sin(Date.now() * 0.005) * 0.05;
+    });
+
+    if (gameState === 'ALARM' && exitZone) {
+        if (exitZone.containsPoint(camera.position)) {
+            if (clickedDetectors < totalDetectors) {
+                uiStatus.innerText = "你必须先关闭所有报警器！";
+            } else {
+                checkWinCondition();
+            }
+        } else if (uiStatus.innerText === "你必须先关闭所有报警器！") {
+             uiStatus.innerText = "火灾警报！快逃！"; 
+        }
+    }
+
+    if(gameState === 'ALARM') {
+        let now = Date.now();
+        
+        for(let i=0; i<fires.length; i++) {
+            let fire = fires[i];
+            fire.rotation.x += delta * 2;
+            fire.rotation.y += delta * 2;
+
+            if (now - lastDamageTime > 1000) { 
+                let dist = Math.hypot(camera.position.x - fire.position.x, camera.position.z - fire.position.z);
+                if(dist < 1.0) { 
+                    health -= 10;
+                    lastDamageTime = now;
+                    updateHealthUI();
+                    flashDamage();
+                    showToast("被火烧伤！-10 生命");
+                    if (health <= 0) {
+                        gameOver(false, "你被大火烧伤过重，倒在了大楼里！");
+                    }
+                    break; 
+                }
+            }
+        }
+
+        let blink = Math.sin(Date.now() * 0.01) > 0;
+        detectors.forEach(d => {
+            if(!d.userData.clicked) {
+                d.userData.light.material.color.setHex(blink ? 0xff0000 : 0x330000);
+            }
+        });
+    }
+}
+
+function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+    let delta = Math.min(clock.getDelta(), 0.1); 
+    
+    updatePhysics(delta);
+    renderer.render(scene, camera);
+    
+    // 渲染实时小地图
+    if (gameState !== 'START') {
+        drawMinimap();
+    }
+}
+
+window.onload = init;
+
+</script>
+</body>
+</html>
