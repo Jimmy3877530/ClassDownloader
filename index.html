@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>资源下载站</title>
+    <style>
+        body { font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+        .file-card { background: white; padding: 15px; margin: 10px 0; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .file-card h3 { margin: 0 0 5px; }
+        .btn { display: inline-block; padding: 8px 16px; background: #007aff; color: white; text-decoration: none; border-radius: 5px; margin-right: 5px; }
+        .btn:hover { background: #005bb5; }
+        .meta { color: gray; font-size: 0.9em; }
+        #search { width: 100%; padding: 10px; margin-bottom: 20px; box-sizing: border-box; }
+    </style>
+</head>
+<body>
+    <h1>📦 资源下载站</h1>
+    <input type="text" id="search" placeholder="搜索文件...">
+
+    <!-- 文件卡片列表 -->
+    <div class="file-card">
+        <h3>💻 信息课资源整合包(Windows)</h3>
+        <p>一款强大的反控工具/Plain Craft Launcher和HMCL/本地烟感器游戏</p>
+        <p class="meta">大小：1.32 GB | 更新：2026-06-14</p>
+        <a href="https://github.com/Jimmy3877530/ClassDownloader/releases/download/v1.0/app-win.zip" class="btn">⬇ 官方下载</a>
+
+    </div>
+
+    <!-- 可以一直复制上面的 card 来添加更多文件 -->
+
+    <script>
+        // 简单搜索过滤
+        document.getElementById('search').addEventListener('input', function(e) {
+            const term = e.target.value.toLowerCase();
+            document.querySelectorAll('.file-card').forEach(card => {
+                const text = card.innerText.toLowerCase();
+                card.style.display = text.includes(term) ? '' : 'none';
+            });
+        });
+    </script>
+</body>
+</html>
