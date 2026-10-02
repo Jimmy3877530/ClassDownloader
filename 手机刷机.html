@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统安装程序（带虚拟桌面）</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    
+    <!-- Tailwind 自定义配置 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        windows: '#00A4EF',    // Windows 品牌蓝
+                        linux: '#FCC624',     // Linux 经典黄
+                        winTaskbar: '#1E1E1E', // Windows 任务栏颜色
+                        winStart: '#0078D7',   // Windows 开始按钮
+                        gnomePanel: '#353535', // GNOME 面板颜色
+                        dark: '#1E293B',
+                        light: '#F8FAFC'
+                    },
+                    fontFamily: {
+                        sans: ['Segoe UI', 'Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .sys-card-hover {
+                transition: all 0.25s ease;
+            }
+            .sys-card-hover:hover {
+                transform: translateY(-3px);
+                box-shadow: 0 8px 16px -4px rgba(0, 0, 0, 0.1);
+            }
+            .progress-bar {
+                transition: width 0.5s ease-in-out;
+            }
+            .category-line {
+                height: 2px;
+                width: 40px;
+                margin-top: 4px;
+            }
+            .desktop-icon {
+                transition: transform 0.2s ease, filter 0.2s ease;
+            }
+            .desktop-icon:hover {
+                transform: scale(1.05);
+                filter: brightness(1.1);
+            }
+            .window-shadow {
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            }
+            .taskbar-item {
+                transition: background-color 0.2s ease;
+            }
+            .taskbar-item:hover {
+                background-color: rgba(255, 255, 255, 0.2);
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans text-gray-800 min-h-screen">
+    <!-- 顶部导航 -->
+    <header class="bg-dark text-white shadow-lg">
+        <div class="container mx-auto px-4 py-5 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <i class="fa fa-desktop text-2xl"></i>
+                <h1 class="text-xl md:text-2xl font-bold">系统安装程序</h1>
+            </div>
+            <div class="hidden md:flex items-center space-x-3 text-sm">
+                <span class="bg-white/15 px-3 py-1 rounded-full">
+                    <i class="fa fa-shield mr-1"></i> 安全环境
+                </span>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="container mx-auto px-4 py-8 max-w-6xl">
+        <!-- 欢迎与列表界面 -->
+        <section id="welcome-screen" class="transition-all duration-500">
+            <div class="bg-white rounded-xl shadow-xl p-5 md:p-7 mb-8">
+                <h2 class="text-[clamp(1.4rem,3vw,2rem)] font-bold text-gray-800 mb-2">欢迎使用系统安装程序！</h2>
+                <p class="text-gray-600 mb-8">可预览并安装真实的 Windows 版本或 Linux 发行版，体验完整安装流程</p>
+                
+                <!-- 系统列表（按分类展示） -->
+                <div class="space-y-8">
+                    <!-- Windows 分类 -->
+                    <div>
+                        <div class="flex items-center mb-4">
+                            <i class="fa fa-windows text-2xl text-windows mr-3"></i>
+                            <h3 class="text-xl font-semibold text-gray-800">Windows 系统</h3>
+                            <div class="category-line bg-windows ml-3"></div>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" id="windows-list">
+                            <!-- Windows 系统卡片由 JS 动态生成 -->
+                        </div>
+                    </div>
+
+                    <!-- Linux 分类 -->
+                    <div>
+                        <div class="flex items-center mb-4">
+                            <i class="fa fa-linux text-2xl text-linux mr-3"></i>
+                            <h3 class="text-xl font-semibold text-gray-800">Linux 发行版</h3>
+                            <div class="category-line bg-linux ml-3"></div>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" id="linux-list">
+                            <!-- Linux 系统卡片由 JS 动态生成 -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 交互输入区 -->
+                <div class="border-t border-gray-200 pt-6 mt-8">
+                    <p class="text-gray-700 mb-4">操作提示：输入系统编号查看详情，输入 <code class="bg-gray-100 px-2 py-1 rounded text-windows font-medium">'flash'</code> 开始安装</p>
+                    <div class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
+                        <input type="text" id="user-input" class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-windows focus:border-windows transition-all outline-none" placeholder="例如：输入 1 查看 Windows 10 详情">
+                        <button id="submit-btn" class="bg-windows hover:bg-windows/90 text-white px-6 py-3 rounded-lg font-medium transition-all shadow-md hover:shadow-lg">
+                            执行操作
+                        </button>
+                    </div>
+                    <p id="error-message" class="text-red-500 mt-3 hidden"><i class="fa fa-exclamation-circle mr-1"></i> 无效选择，请重试</p>
+                </div>
+            </div>
+        </section>
+        
+        <!-- 系统预览界面（增强版） -->
+        <section id="detail-screen" class="hidden transition-all duration-500">
+            <div class="bg-white rounded-xl shadow-xl p-5 md:p-7 mb-8">
+                <!-- 顶部返回与系统标识 -->
+                <div class="flex flex-wrap justify-between items-start mb-6 gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-800" id="detail-name"></h2>
+                        <p class="text-gray-500 mt-1" id="detail-baseline"></p>
+                    </div>
+                    <button id="back-btn" class="flex items-center text-gray-600 hover:text-gray-800 transition-colors bg-gray-100 px-4 py-2 rounded-lg">
+                        <i class="fa fa-arrow-left mr-2"></i> 返回系统列表
+                    </button>
+                </div>
+                
+                <!-- 系统桌面预览 -->
+                <div class="mb-8">
+                    <h3 class="text-lg font-semibold mb-3 flex items-center">
+                        <i class="fa fa-desktop text-windows mr-2"></i> 桌面预览
+                    </h3>
+                    <div class="bg-gray-100 p-4 rounded-lg shadow-sm">
+                        <div id="detail-desktop" class="w-full rounded overflow-hidden border border-gray-300 aspect-[16/9]">
+                            <!-- 虚拟桌面将通过JS动态生成 -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 系统核心信息 -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <!-- 基础信息卡片 -->
+                    <div class="md:col-span-2 bg-gray-50 rounded-lg p-5">
+                        <h3 class="text-lg font-semibold mb-4 flex items-center">
+                            <i class="fa fa-info-circle text-windows mr-2"></i> 系统信息
+                        </h3>
+                        <ul class="space-y-3 text-gray-700">
+                            <li class="flex items-start">
+                                <span class="w-24 text-gray-500">版本号：</span>
+                                <span id="detail-version" class="font-medium"></span>
+                            </li>
+                            <li class="flex items-start">
+                                <span class="w-24 text-gray-500">发布时间：</span>
+                                <span id="detail-release"></span>
+                            </li>
+                            <li class="flex items-start">
+                                <span class="w-24 text-gray-500">开发厂商：</span>
+                                <span id="detail-vendor"></span>
+                            </li>
+                            <li class="flex items-start">
+                                <span class="w-24 text-gray-500">系统类型：</span>
+                                <span id="detail-type"></span>
+                            </li>
+                        </ul>
+                    </div>
+                    
+                    <!-- 系统图标卡片 -->
+                    <div class="bg-gray-50 rounded-lg p-5 flex flex-col items-center justify-center">
+                        <div id="detail-icon" class="text-6xl mb-4"></div>
+                        <span class="text-gray-600 text-sm" id="detail-code"></span>
+                    </div>
+                </div>
+                
+                <!-- 系统描述与特性 -->
+                <div class="space-y-6">
+                    <!-- 详细描述 -->
+                    <div>
+                        <h3 class="text-lg font-semibold mb-3 flex items-center">
+                            <i class="fa fa-file-text-o text-windows mr-2"></i> 系统描述
+                        </h3>
+                        <p id="detail-description" class="text-gray-700 leading-relaxed bg-gray-50 p-4 rounded-lg"></p>
+                    </div>
+                    
+                    <!-- 核心特性 -->
+                    <div>
+                        <h3 class="text-lg font-semibold mb-3 flex items-center">
+                            <i class="fa fa-star text-windows mr-2"></i> 核心特性
+                        </h3>
+                        <ul id="detail-features" class="text-gray-700 space-y-2 bg-gray-50 p-4 rounded-lg">
+                            <!-- 特性列表由 JS 动态生成 -->
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- 安装进度界面 -->
+        <section id="flash-screen" class="hidden transition-all duration-500">
+            <div class="bg-white rounded-xl shadow-xl p-5 md:p-7 mb-8">
+                <h2 class="text-2xl font-bold text-gray-800 mb-2">正在安装系统</h2>
+                <p class="text-gray-600 mb-6" id="flash-system-name"></p>
+                
+                <!-- 进度条 -->
+                <div class="w-full bg-gray-200 rounded-full h-3 mb-6">
+                    <div id="flash-progress" class="progress-bar bg-windows h-3 rounded-full" style="width: 0%"></div>
+                </div>
+                
+                <!-- 安装步骤日志 -->
+                <div id="flash-logs" class="bg-gray-50 rounded-lg p-4 h-40 overflow-y-auto text-gray-700 space-y-2 mb-6">
+                    <p><i class="fa fa-spinner fa-spin mr-2"></i> 初始化安装环境...</p>
+                </div>
+                
+                <!-- 完成后操作按钮（默认隐藏） -->
+                <div id="flash-buttons" class="flex justify-center space-x-4 hidden">
+                    <button id="flash-restart" class="bg-windows hover:bg-windows/90 text-white px-6 py-3 rounded-lg font-medium transition-all">
+                        <i class="fa fa-refresh mr-1"></i> 重新开始
+                    </button>
+                    <button id="flash-exit" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-6 py-3 rounded-lg font-medium transition-all">
+                        <i class="fa fa-times mr-1"></i> 退出程序
+                    </button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="bg-dark text-white py-6 mt-auto">
+        <div class="container mx-auto px-4 text-center text-sm text-gray-400">
+            <p>系统安装程序 | 仅用于学习和体验，非官方工具</p>
+            <p class="mt-2">所有系统名称和标识归其 respective 开发商所有</p>
+        </div>
+    </footer>
+
+    <script>
+        // 1. 真实系统数据库（包含虚拟桌面配置）
+        const systemDatabase = [
+            // Windows 系统（编号 1-4）
+            {
+                id: 1,
+                type: "windows",
+                name: "Windows 10",
+                version: "22H2",
+                release: "2022年10月",
+                vendor: "Microsoft",
+                baseline: "基于 Windows NT 10.0 内核",
+                code: "Threshold",
+                description: "Windows 10 是微软发布的跨平台操作系统，兼顾传统桌面与现代触控体验，支持虚拟桌面、Cortana 语音助手和 Microsoft Edge 浏览器，是目前全球使用最广泛的桌面操作系统之一，官方支持持续至 2025 年 10 月。",
+                features: [
+                    "- 支持虚拟桌面，提升多任务处理效率",
+                    "- 内置 Microsoft Edge 浏览器，兼容 Chromium 内核",
+                    "- 提供自动更新和安全防护功能（Windows Defender）",
+                    "- 支持 DirectX 12，优化游戏性能"
+                ],
+                desktop: {
+                    background: "linear-gradient(135deg, #0078D7 0%, #00A4EF 100%)",
+                    icons: [
+                        { name: "此电脑", icon: "fa-desktop", color: "#2D7DDB" },
+                        { name: "文档", icon: "fa-file-text-o", color: "#118C4E" },
+                        { name: "图片", icon: "fa-picture-o", color: "#C30000" },
+                        { name: "Edge", icon: "fa-globe", color: "#0078D7" },
+                        { name: "设置", icon: "fa-cog", color: "#0078D7" }
+                    ],
+                    windows: [
+                        { 
+                            title: "文件资源管理器", 
+                            x: 100, 
+                            y: 80, 
+                            width: 400, 
+                            height: 300,
+                            content: "文件管理器内容预览"
+                        }
+                    ]
+                }
+            },
+            {
+                id: 2,
+                type: "windows",
+                name: "Windows 11",
+                version: "23H2",
+                release: "2023年10月",
+                vendor: "Microsoft",
+                baseline: "基于 Windows NT 10.0 内核（更新版）",
+                code: "Sun Valley",
+                description: "Windows 11 是微软于 2021 年发布的新一代操作系统，采用全新设计语言，居中任务栏、圆角窗口和动态光影效果，强化了微软商店生态，原生支持安卓应用（通过 WSA），并提升了游戏和多任务处理能力。",
+                features: [
+                    "- 全新视觉设计，居中任务栏+圆角窗口",
+                    "- 原生支持安卓应用（需安装 Windows Subsystem for Android）",
+                    "- 增强游戏功能（Auto HDR、DirectStorage）",
+                    "- 优化多任务：Snap Layouts 窗口布局、虚拟桌面分组"
+                ],
+                desktop: {
+                    background: "linear-gradient(135deg, #3B82F6 0%, #60A5FA 100%)",
+                    icons: [
+                        { name: "此电脑", icon: "fa-desktop", color: "#3B82F6" },
+                        { name: "文档", icon: "fa-file-text-o", color: "#10B981" },
+                        { name: "Edge", icon: "fa-globe", color: "#3B82F6" },
+                        { name: "照片", icon: "fa-picture-o", color: "#EC4899" },
+                        { name: "设置", icon: "fa-cog", color: "#6366F1" }
+                    ],
+                    windows: [
+                        { 
+                            title: "设置 - 系统", 
+                            x: 150, 
+                            y: 100, 
+                            width: 500, 
+                            height: 350,
+                            content: "显示 | 声音 | 电源 | 存储",
+                            rounded: true
+                        }
+                    ]
+                }
+            },
+            {
+                id: 3,
+                type: "windows",
+                name: "Windows Server 2022",
+                version: "Datacenter",
+                release: "2021年8月",
+                vendor: "Microsoft",
+                baseline: "基于 Windows NT 10.0 服务器内核",
+                code: "Iron",
+                description: "Windows Server 2022 是微软面向企业级服务器场景的操作系统，专注于安全性、稳定性和云集成，支持 Azure 混合云部署，提供软件定义存储、网络虚拟化和容器化支持，适用于数据中心、边缘计算等场景。",
+                features: [
+                    "- 强化安全：Secure Boot、BitLocker 加密、Shielded VMs",
+                    "- 支持 Azure Arc 混合云管理，无缝连接公有云",
+                    "- 优化容器性能，支持 Kubernetes 集成",
+                    "- 长期服务支持（LTSC），更新周期稳定"
+                ],
+                desktop: {
+                    background: "#003B5C",
+                    icons: [
+                        { name: "服务器管理器", icon: "fa-server", color: "#00A4EF" },
+                        { name: "计算机管理", icon: "fa-cogs", color: "#00A4EF" },
+                        { name: "PowerShell", icon: "fa-terminal", color: "#555555" },
+                        { name: "事件查看器", icon: "fa-list-alt", color: "#00A4EF" }
+                    ],
+                    windows: [
+                        { 
+                            title: "服务器管理器", 
+                            x: 80, 
+                            y: 60, 
+                            width: 600, 
+                            height: 400,
+                            content: "仪表盘 | 本地服务器 | 所有服务器 | 角色和功能"
+                        }
+                    ]
+                }
+            },
+            {
+                id: 4,
+                type: "windows",
+                name: "Windows 10 LTSC 2021",
+                version: "1809",
+                release: "2021年11月",
+                vendor: "Microsoft",
+                baseline: "基于 Windows NT 10.0 内核（长期服务版）",
+                code: "Redstone 5",
+                description: "Windows 10 LTSC（长期服务频道）是面向企业和工业设备的稳定版本，无 Edge 浏览器、Cortana 等消费级功能，更新频率低（每 2-3 年一次大更新），官方支持周期长达 10 年，适合对稳定性要求极高的场景。",
+                features: [
+                    "- 长期服务支持：官方支持至 2032 年 1 月",
+                    "- 无预装消费级应用，系统更精简稳定",
+                    "- 可手动控制更新，避免意外变更",
+                    "- 适合工业控制、ATM、医疗设备等专用场景"
+                ],
+                desktop: {
+                    background: "linear-gradient(135deg, #4A6FA5 0%, #6184D8 100%)",
+                    icons: [
+                        { name: "计算机", icon: "fa-desktop", color: "#2D7DDB" },
+                        { name: "控制面板", icon: "fa-sliders", color: "#555555" },
+                        { name: "命令提示符", icon: "fa-terminal", color: "#555555" },
+                        { name: "设备管理器", icon: "fa-microchip", color: "#2D7DDB" }
+                    ],
+                    windows: [
+                        { 
+                            title: "控制面板", 
+                            x: 120, 
+                            y: 90, 
+                            width: 450, 
+                            height: 320,
+                            content: "系统和安全 | 程序 | 外观和个性化 | 硬件和声音"
+                        }
+                    ]
+                }
+            },
+            // Linux 发行版（编号 5-8）
+            {
+                id: 5,
+                type: "linux",
+                name: "Ubuntu 22.04 LTS",
+                version: "Jammy Jellyfish",
+                release: "2022年4月",
+                vendor: "Canonical",
+                baseline: "基于 Debian 11 (Bullseye) 构建",
+                code: "Jammy Jellyfish",
+                description: "Ubuntu 22.04 LTS 是最流行的 Linux 发行版之一，面向桌面和服务器场景，采用 GNOME 42 桌面环境，支持长期服务（5 年官方支持），兼容性强，软件生态丰富，适合初学者和企业用户。",
+                features: [
+                    "- 长期支持版：官方维护至 2027 年 4 月",
+                    "- 预装 GNOME 42 桌面，界面简洁易用",
+                    "- 强大的软件包管理（APT），支持海量开源软件",
+                    "- 对硬件兼容性好，安装流程友好"
+                ],
+                desktop: {
+                    background: "linear-gradient(135deg, #E95420 0%, #F67280 100%)",
+                    icons: [
+                        { name: "主文件夹", icon: "fa-folder", color: "#E95420" },
+                        { name: "Firefox", icon: "fa-firefox", color: "#FF9500" },
+                        { name: "终端", icon: "fa-terminal", color: "#4E9A06" },
+                        { name: "设置", icon: "fa-cog", color: "#555555" },
+                        { name: "软件中心", icon: "fa-shopping-bag", color: "#772953" }
+                    ],
+                    windows: [
+                        { 
+                            title: "终端", 
+                            x: 100, 
+                            y: 80, 
+                            width: 500, 
+                            height: 300,
+                            content: "user@ubuntu:~$ sudo apt update\n正在读取软件包列表... 完成"
+                        }
+                    ]
+                }
+            },
+            {
+                id: 6,
+                type: "linux",
+                name: "CentOS Stream 9",
+                version: "9",
+                release: "2022年5月",
+                vendor: "Red Hat",
+                baseline: "基于 Red Hat Enterprise Linux (RHEL) 上游源码",
+                code: "Stream 9",
+                description: "CentOS Stream 9 是 Red Hat 主导的滚动更新发行版，作为 RHEL 的上游开发分支，提供稳定且持续更新的系统环境，适用于企业服务器、开发测试场景，兼容 RHEL 的软件生态，免费使用。",
+                features: [
+                    "- 滚动更新模式，持续获取最新功能和安全补丁",
+                    "- 与 RHEL 高度兼容，可无缝迁移至 RHEL 商业版",
+                    "- 适合企业级服务器、数据库、中间件部署",
+                    "- 强大的系统管理工具（dnf、cockpit）"
+                ],
+                desktop: {
+                    background: "#2E5EAA",
+                    icons: [
+                        { name: "主目录", icon: "fa-folder", color: "#3584E4" },
+                        { name: "Firefox", icon: "fa-firefox", color: "#FF9500" },
+                        { name: "终端", icon: "fa-terminal", color: "#555555" },
+                        { name: "Cockpit", icon: "fa-server", color: "#3584E4" }
+                    ],
+                    windows: [
+                        { 
+                            title: "终端", 
+                            x: 120, 
+                            y: 90, 
+                            width: 550, 
+                            height: 320,
+                            content: "[user@centos ~]$ sudo dnf check-update\nLast metadata expiration check: 0:10:23 ago"
+                        }
+                    ]
+                }
+            },
+            {
+                id: 7,
+                type: "linux",
+                name: "Debian 12",
+                version: "Bookworm",
+                release: "2023年6月",
+                vendor: "Debian Project",
+                baseline: "独立开发的 Linux 发行版（上游）",
+                code: "Bookworm",
+                description: "Debian 12 是历史悠久的开源 Linux 发行版，以稳定性和安全性著称，包含超过 60,000 个开源软件包，支持多种硬件架构，无商业赞助，由全球开发者社区维护，是 Ubuntu、Linux Mint 等发行版的基础。",
+                features: [
+                    "- 极致稳定：仅包含经过严格测试的软件版本",
+                    "- 完全开源，无闭源组件，遵循 GNU 协议",
+                    "- 支持多架构（x86_64、ARM、PowerPC 等）",
+                    "- 强大的包管理系统（dpkg + APT），软件生态完善"
+                ],
+                desktop: {
+                    background: "linear-gradient(135deg, #D70A53 0%, #FF5E87 100%)",
+                    icons: [
+                        { name: "主文件夹", icon: "fa-folder", color: "#D70A53" },
+                        { name: "Firefox", icon: "fa-firefox", color: "#FF9500" },
+                        { name: "终端", icon: "fa-terminal", color: "#555555" },
+                        { name: " synaptic", icon: "fa-puzzle-piece", color: "#D70A53" }
+                    ],
+                    windows: [
+                        { 
+                            title: " synaptic 包管理器", 
+                            x: 150, 
+                            y: 100, 
+                            width: 600, 
+                            height: 400,
+                            content: "已安装 (1,234) | 可升级 (5) | 未安装 (45,678)"
+                        }
+                    ]
+                }
+            },
+            {
+                id: 8,
+                type: "linux",
+                name: "Fedora Workstation 39",
+                version: "39",
+                release: "2023年11月",
+                vendor: "Fedora Project (Red Hat 赞助)",
+                baseline: "基于 RHEL 上游开发分支",
+                code: "Silverblue（变体）",
+                description: "Fedora Workstation 39 是面向桌面用户的前沿 Linux 发行版，采用最新的 GNOME 桌面环境，优先集成开源社区的新功能，更新周期短（每 6 个月一次），适合开发者和技术爱好者体验最新 Linux 技术。",
+                features: [
+                    "- 前沿技术：率先支持最新内核、桌面环境和软件",
+                    "- 预装开发工具（Git、GCC、Docker），开箱即用",
+                    "- 支持原子化更新（Silverblue 变体），系统可回滚",
+                    "- 内置 Flatpak 应用商店，轻松获取跨发行版软件"
+                ],
+                desktop: {
+                    background: "linear-gradient(135deg, #294172 0%, #5072A7 100%)",
+                    icons: [
+                        { name: "主目录", icon: "fa-folder", color: "#3584E4" },
+                        { name: "Firefox", icon: "fa-firefox", color: "#FF9500" },
+                        { name: "终端", icon: "fa-terminal", color: "#555555" },
+                        { name: "VS Code", icon: "fa-code", color: "#007ACC" },
+                        { name: "软件", icon: "fa-th", color: "#3584E4" }
+                    ],
+                    windows: [
+                        { 
+                            title: "VS Code", 
+                            x: 100, 
+                            y: 80, 
+                            width: 650, 
+                            height: 400,
+                            content: "main.js - Visual Studio Code",
+                            rounded: true
+                        }
+                    ]
+                }
+            }
+        ];
+
+        // 2. DOM 元素获取
+        const welcomeScreen = document.getElementById('welcome-screen');
+        const detailScreen = document.getElementById('detail-screen');
+        const flashScreen = document.getElementById('flash-screen');
+        const userInput = document.getElementById('user-input');
+        const submitBtn = document.getElementById('submit-btn');
+        const errorMessage = document.getElementById('error-message');
+        const backBtn = document.getElementById('back-btn');
+        const flashRestart = document.getElementById('flash-restart');
+        const flashExit = document.getElementById('flash-exit');
+
+        // 3. 初始化：生成系统列表（包含桌面缩略图）
+        function initSystemList() {
+            const windowsList = document.getElementById('windows-list');
+            const linuxList = document.getElementById('linux-list');
+            
+            // 分类渲染 Windows 和 Linux 卡片
+            systemDatabase.forEach(sys => {
+                // 生成卡片缩略图中的简化桌面
+                const thumbnailDesktop = generateThumbnailDesktop(sys);
+                
+                const card = document.createElement('div');
+                card.className = 'bg-white border rounded-lg overflow-hidden shadow-sm sys-card-hover';
+                card.innerHTML = `
+                    <div class="relative h-36 overflow-hidden">
+                        <div class="w-full h-full">${thumbnailDesktop}</div>
+                        <div class="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
+                            编号: ${sys.id}
+                        </div>
+                    </div>
+                    <div class="p-4">
+                        <div class="flex items-center mb-2">
+                            <i class="fa fa-${sys.type} text-${sys.type} text-xl mr-2"></i>
+                            <span class="font-bold text-gray-800">${sys.name}</span>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-2">版本：${sys.version}</p>
+                        <p class="text-gray-500 text-xs">
+                            <i class="fa fa-code-fork mr-1"></i> ${sys.code}
+                        </p>
+                    </div>
+                `;
+                
+                // 点击卡片直接进入详情
+                card.addEventListener('click', () => {
+                    showSystemDetail(sys.id);
+                });
+                
+                // 按类型添加到对应列表
+                if (sys.type === 'windows') {
+                    windowsList.appendChild(card);
+                } else {
+                    linuxList.appendChild(card);
+                }
+            });
+        }
+
+        // 4. 生成缩略图中的简化桌面
+        function generateThumbnailDesktop(sys) {
+            const desktop = sys.desktop;
+            let iconsHtml = '';
+            
+            // 只显示前3个图标
+            const displayIcons = desktop.icons.slice(0, 3);
+            displayIcons.forEach((icon, index) => {
+                iconsHtml += `
+                    <div class="absolute left-4 top-${8 + index * 10}" style="width: 40px; text-align: center;">
+                        <div class="w-8 h-8 mx-auto rounded-full flex items-center justify-center" style="background-color: ${icon.color}20; color: ${icon.color}">
+                            <i class="fa ${icon.icon}"></i>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            // 简化的任务栏
+            let taskbarHtml = '';
+            if (sys.type === 'windows') {
+                taskbarHtml = `
+                    <div class="absolute bottom-0 left-0 right-0 h-8 bg-winTaskbar flex items-center px-2">
+                        <div class="w-6 h-6 bg-winStart rounded flex items-center justify-center text-white">
+                            <i class="fa fa-windows"></i>
+                        </div>
+                        <div class="ml-2 flex space-x-1">
+                            <div class="w-6 h-6 rounded-sm bg-white/20 flex items-center justify-center text-white text-xs">
+                                <i class="fa fa-search"></i>
+                            </div>
+                            <div class="w-20 h-6 rounded-sm bg-white/20 flex items-center px-1 text-white text-xs truncate">
+                                文件资源管理器
+                            </div>
+                        </div>
+                        <div class="ml-auto flex items-center">
+                            <div class="w-8 h-6 flex items-center justify-center text-white">
+                                <i class="fa fa-volume-up"></i>
+                            </div>
+                            <div class="w-16 h-6 flex items-center justify-center text-white text-xs">
+                                14:30
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                taskbarHtml = `
+                    <div class="absolute bottom-0 left-0 right-0 h-8 bg-gnomePanel flex items-center px-2">
+                        <div class="w-6 h-6 flex items-center justify-center text-white">
+                            <i class="fa fa-ubuntu"></i>
+                        </div>
+                        <div class="ml-2 flex space-x-1">
+                            <div class="w-6 h-6 rounded-sm bg-white/20 flex items-center justify-center text-white text-xs">
+                                <i class="fa fa-search"></i>
+                            </div>
+                            <div class="w-20 h-6 rounded-sm bg-white/20 flex items-center px-1 text-white text-xs truncate">
+                                终端
+                            </div>
+                        </div>
+                        <div class="ml-auto flex items-center">
+                            <div class="w-8 h-6 flex items-center justify-center text-white">
+                                <i class="fa fa-volume-up"></i>
+                            </div>
+                            <div class="w-16 h-6 flex items-center justify-center text-white text-xs">
+                                14:30
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            return `
+                <div class="w-full h-full relative" style="background: ${desktop.background}">
+                    ${iconsHtml}
+                    ${taskbarHtml}
+                </div>
+            `;
+        }
+
+        // 5. 生成完整的虚拟桌面
+        function generateFullDesktop(sys) {
+            const desktop = sys.desktop;
+            let iconsHtml = '';
+            let windowsHtml = '';
+            
+            // 生成桌面图标
+            desktop.icons.forEach((icon, index) => {
+                const row = Math.floor(index / 3);
+                const col = index % 3;
+                iconsHtml += `
+                    <div class="desktop-icon absolute" style="left: ${20 + col * 80}px; top: ${20 + row * 90}px; width: 60px; text-align: center;">
+                        <div class="w-10 h-10 mx-auto rounded-full flex items-center justify-center mb-1" style="background-color: ${icon.color}20; color: ${icon.color}">
+                            <i class="fa ${icon.icon} text-lg"></i>
+                        </div>
+                        <div class="text-white text-xs shadow-md">${icon.name}</div>
+                    </div>
+                `;
+            });
+            
+            // 生成窗口
+            desktop.windows.forEach(window => {
+                const windowClasses = window.rounded ? 'rounded-lg window-shadow' : 'window-shadow';
+                windowsHtml += `
+                    <div class="absolute ${windowClasses}" style="left: ${window.x}px; top: ${window.y}px; width: ${window.width}px; height: ${window.height}px; background-color: white;">
+                        <div class="h-8 bg-gray-800 text-white px-3 flex items-center justify-between">
+                            <div class="text-sm font-medium">${window.title}</div>
+                            <div class="flex space-x-1">
+                                <div class="w-5 h-5 flex items-center justify-center hover:bg-gray-700 rounded-sm">
+                                    <i class="fa fa-window-minimize text-xs"></i>
+                                </div>
+                                <div class="w-5 h-5 flex items-center justify-center hover:bg-gray-700 rounded-sm">
+                                    <i class="fa fa-window-maximize text-xs"></i>
+                                </div>
+                                <div class="w-5 h-5 flex items-center justify-center hover:bg-red-600 rounded-sm">
+                                    <i class="fa fa-times text-xs"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="p-4 text-sm text-gray-700">
+                            <p>${window.content}</p>
+                            <div class="mt-2 h-1 bg-gray-200 rounded-full overflow-hidden">
+                                <div class="h-full bg-gray-400" style="width: 60%"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            // 生成任务栏
+            let taskbarHtml = '';
+            if (sys.type === 'windows') {
+                taskbarHtml = `
+                    <div class="absolute bottom-0 left-0 right-0 h-10 bg-winTaskbar flex items-center px-4">
+                        <div class="w-8 h-8 bg-winStart rounded flex items-center justify-center text-white">
+                            <i class="fa fa-windows"></i>
+                        </div>
+                        <div class="ml-3 flex space-x-2">
+                            <div class="h-8 px-3 bg-white/20 flex items-center text-white text-sm rounded-sm">
+                                <i class="fa fa-search mr-1"></i> 搜索
+                            </div>
+                            <div class="h-8 px-3 bg-windows flex items-center text-white text-sm rounded-sm">
+                                <i class="fa fa-folder mr-1"></i> ${desktop.windows[0].title}
+                            </div>
+                            <div class="h-8 w-8 bg-white/20 flex items-center justify-center text-white rounded-sm">
+                                <i class="fa fa-edge"></i>
+                            </div>
+                        </div>
+                        <div class="ml-auto flex items-center space-x-4">
+                            <div class="h-8 w-8 flex items-center justify-center text-white">
+                                <i class="fa fa-volume-up"></i>
+                            </div>
+                            <div class="h-8 w-8 flex items-center justify-center text-white">
+                                <i class="fa fa-wifi"></i>
+                            </div>
+                            <div class="h-8 w-8 flex items-center justify-center text-white">
+                                <i class="fa fa-battery-full"></i>
+                            </div>
+                            <div class="text-white text-sm">
+                                14:30
+                            </div>
+                            <div class="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center text-white">
+                                <i class="fa fa-user"></i>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                taskbarHtml = `
+                    <div class="absolute bottom-0 left-0 right-0 h-10 bg-gnomePanel flex items-center px-4">
+                        <div class="w-8 h-8 flex items-center justify-center text-white">
+                            <i class="fa fa-ubuntu text-lg"></i>
+                        </div>
+                        <div class="ml-3 flex space-x-2">
+                            <div class="h-8 px-3 bg-white/20 flex items-center text-white text-sm rounded-sm">
+                                <i class="fa fa-search mr-1"></i> 活动
+                            </div>
+                            <div class="h-8 px-3 bg-linux flex items-center text-gray-800 text-sm rounded-sm">
+                                <i class="fa fa-terminal mr-1"></i> ${desktop.windows[0].title}
+                            </div>
+                            <div class="h-8 w-8 bg-white/20 flex items-center justify-center text-white rounded-sm">
+                                <i class="fa fa-firefox"></i>
+                            </div>
+                        </div>
+                        <div class="ml-auto flex items-center space-x-4">
+                            <div class="h-8 w-8 flex items-center justify-center text-white">
+                                <i class="fa fa-volume-up"></i>
+                            </div>
+                            <div class="h-8 w-8 flex items-center justify-center text-white">
+                                <i class="fa fa-wifi"></i>
+                            </div>
+                            <div class="h-8 w-8 flex items-center justify-center text-white">
+                                <i class="fa fa-battery-full"></i>
+                            </div>
+                            <div class="text-white text-sm">
+                                14:30
+                            </div>
+                            <div class="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center text-white">
+                                <i class="fa fa-user"></i>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            return `
+                <div class="w-full h-full relative" style="background: ${desktop.background}">
+                    ${iconsHtml}
+                    ${windowsHtml}
+                    ${taskbarHtml}
+                </div>
+            `;
+        }
+
+        // 6. 预览功能：显示系统详情（包含完整虚拟桌面）
+        function showSystemDetail(sysId) {
+            const system = systemDatabase.find(sys => sys.id === parseInt(sysId));
+            if (!system) return false;
+            
+            // 填充详情数据
+            document.getElementById('detail-name').textContent = system.name;
+            document.getElementById('detail-baseline').textContent = system.baseline;
+            document.getElementById('detail-version').textContent = system.version;
+            document.getElementById('detail-release').textContent = system.release;
+            document.getElementById('detail-vendor').textContent = system.vendor;
+            document.getElementById('detail-type').textContent = system.type === 'windows' ? '闭源商业操作系统' : '开源 Linux 发行版';
+            document.getElementById('detail-code').textContent = `开发代号：${system.code}`;
+            document.getElementById('detail-description').textContent = system.description;
+            
+            // 生成并设置虚拟桌面
+            const desktopElement = document.getElementById('detail-desktop');
+            desktopElement.innerHTML = generateFullDesktop(system);
+            
+            // 渲染特性列表
+            const featuresList = document.getElementById('detail-features');
+            featuresList.innerHTML = '';
+            system.features.forEach(feature => {
+                const li = document.createElement('li');
+                li.innerHTML = feature;
+                featuresList.appendChild(li);
+            });
+            
+            // 设置系统图标
+            const iconElement = document.getElementById('detail-icon');
+            iconElement.className = `fa fa-${system.type} text-${system.type} text-6xl mb-4`;
+            
+            // 切换界面
+            welcomeScreen.classList.add('hidden');
+            detailScreen.classList.remove('hidden');
+            return true;
+        }
+
+        // 7. 安装功能
+        function executeInstallation(sysId) {
+            const system = systemDatabase.find(sys => sys.id === parseInt(sysId));
+            if (!system) return false;
+            
+            // 切换到安装界面
+            welcomeScreen.classList.add('hidden');
+            detailScreen.classList.add('hidden');
+            flashScreen.classList.remove('hidden');
+            
+            // 设置安装系统名称
+            document.getElementById('flash-system-name').textContent = `正在安装 ${system.name} (${system.version})`;
+            
+            // 安装步骤与进度
+            const progressBar = document.getElementById('flash-progress');
+            const logsContainer = document.getElementById('flash-logs');
+            const steps = [
+                { text: '正在检查硬件兼容性...', progress: 15, delay: 1500 },
+                { text: '正在格式化目标分区...', progress: 30, delay: 1200 },
+                { text: '正在复制系统文件...', progress: 60, delay: 2000 },
+                { text: '正在配置系统参数...', progress: 80, delay: 1500 },
+                { text: '正在安装驱动程序...', progress: 90, delay: 1200 },
+                { text: '安装完成，正在准备重启...', progress: 100, delay: 1800 }
+            ];
+            
+            // 执行安装步骤
+            let stepIndex = 0;
+            function executeStep() {
+                if (stepIndex < steps.length) {
+                    const step = steps[stepIndex];
+                    // 更新日志
+                    const logItem = document.createElement('p');
+                    logItem.innerHTML = `<i class="fa fa-check-circle text-green-500 mr-2"></i>${step.text}`;
+                    logsContainer.appendChild(logItem);
+                    logsContainer.scrollTop = logsContainer.scrollHeight;
+                    
+                    // 更新进度
+                    progressBar.style.width = `${step.progress}%`;
+                    
+                    // 执行下一步
+                    stepIndex++;
+                    setTimeout(executeStep, step.delay);
+                } else {
+                    // 安装完成，显示操作按钮
+                    const successLog = document.createElement('p');
+                    successLog.innerHTML = `<i class="fa fa-flag-checkered text-green-600 mr-2"></i>恭喜！${system.name} 已成功安装并启动`;
+                    logsContainer.appendChild(successLog);
+                    logsContainer.scrollTop = logsContainer.scrollHeight;
+                    document.getElementById('flash-buttons').classList.remove('hidden');
+                }
+            }
+            
+            // 启动安装流程
+            setTimeout(executeStep, 1000);
+            return true;
+        }
+
+        // 8. 事件监听：提交按钮
+        submitBtn.addEventListener('click', handleSubmit);
+        userInput.addEventListener('keydown', (e) => e.key === 'Enter' && handleSubmit());
+        
+        function handleSubmit() {
+            const inputValue = userInput.value.trim().toLowerCase();
+            errorMessage.classList.add('hidden');
+            userInput.value = '';
+            
+            // 情况1：输入 flash 进入安装选择
+            if (inputValue === 'flash') {
+                const targetId = prompt('请输入要安装的系统编号（1-8）：');
+                if (!targetId) return;
+                const isSuccess = executeInstallation(targetId);
+                if (!isSuccess) {
+                    errorMessage.classList.remove('hidden');
+                    // 回到欢迎界面
+                    flashScreen.classList.add('hidden');
+                    welcomeScreen.classList.remove('hidden');
+                }
+            } 
+            // 情况2：输入编号查看详情
+            else if (/^\d+$/.test(inputValue)) {
+                const isSuccess = showSystemDetail(inputValue);
+                if (!isSuccess) {
+                    errorMessage.classList.remove('hidden');
+                }
+            } 
+            // 情况3：无效输入
+            else {
+                errorMessage.classList.remove('hidden');
+            }
+        }
+
+        // 9. 事件监听：返回按钮（从预览回到列表）
+        backBtn.addEventListener('click', () => {
+            detailScreen.classList.add('hidden');
+            welcomeScreen.classList.remove('hidden');
+        });
+
+        // 10. 事件监听：安装完成后操作
+        flashRestart.addEventListener('click', () => {
+            // 重置安装界面
+            document.getElementById('flash-progress').style.width = '0%';
+            document.getElementById('flash-logs').innerHTML = '<p><i class="fa fa-spinner fa-spin mr-2"></i> 初始化安装环境...</p>';
+            document.getElementById('flash-buttons').classList.add('hidden');
+            
+            // 回到欢迎界面
+            flashScreen.classList.add('hidden');
+            welcomeScreen.classList.remove('hidden');
+        });
+        
+        flashExit.addEventListener('click', () => {
+            alert('感谢使用系统安装程序！');
+            window.close(); // 仅在弹出窗口中有效，浏览器标签页需手动关闭
+        });
+
+        // 11. 初始化页面
+        window.onload = initSystemList;
+    </script>
+</body>
+</html>
